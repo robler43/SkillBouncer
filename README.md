@@ -1,138 +1,141 @@
 # Estes
 
-**The AI-powered bouncer for third-party AI agent skills**
-
 **Runtime supply-chain security for agentic AI**
-Protecting OpenClaw, Antigravity, Claude Code, and watsonx Orchestrate-style agents from silent credential leaks and tool-output poisoning.
+
+A pre-install auditor and runtime redaction wrapper for third-party skills used by OpenClaw, Antigravity, Claude Code, and watsonx Orchestrate-style agents. Catches the silent credential leaks and tool-output poisoning that flow straight into the model context window.
+
+> **Live prototype:** [estesss.vercel.app](https://estesss.vercel.app/)
 
 ---
 
-## 🎯 Problem This Project Solves
+## The problem
 
-Recent research (April 2026) audited **17,022 publicly available third-party AI agent skills** and discovered:
+Recent research (April 2026) audited **17,022 publicly available third-party AI agent skills** and found:
 
-- **3.1%** are actively leaking real API keys, OAuth tokens, and passwords **during normal execution**.
-- **73.5%** of leaks come from simple leftover `print()` / `console.log()` debug statements.
-- Agent frameworks (Claude Code, OpenClaw, Antigravity, LangGraph, etc.) automatically capture stdout and **inject it straight into the LLM context window**.
-- Once the secret is in the context, **anyone continuing the chat or receiving a shared/exported history** can retrieve the key with a normal follow-up question.
+- **3.1%** are actively leaking real API keys, OAuth tokens, and passwords during normal execution.
+- **73.5%** of leaks come from leftover `print()` / `console.log()` debug statements.
+- Agent frameworks automatically capture stdout and inject it directly into the LLM context window.
+- Once the secret is in the context, anyone who continues, shares, or exports the chat can extract it with a normal follow-up question.
 
-This is a **silent, no-hack-required supply-chain vulnerability** that affects every developer and enterprise using agent skills.
+It's a silent, no-hack-required supply-chain vulnerability that affects every team using agent skills. IBM has flagged this exact risk class for runtime guardrails on platforms like watsonx Orchestrate (which ships with 500+ third-party skills).
 
-IBM has explicitly called out this class of risk in their April 2026 agentic security announcements, emphasizing the need for runtime guardrails and governance in platforms like **watsonx Orchestrate** (which ships with 500+ third-party skills).
+## What Estes does
 
-## 🛡️ What Estes Does
+### 1. Pre-Install Auditor (web dashboard)
 
-Estes is a **two-layer defense** built specifically for this problem:
+Drop a `.zip` or paste a public GitHub URL. Estes runs two static passes — no LLM, no telemetry — and returns a single risk score in seconds:
 
-### 1. Pre-Install Auditor (Skill Checkup)
+- **Static pass:** regex + entropy detectors for API keys, OAuth tokens, wallet keys, SSH keys, cloud/DB credentials.
+- **AST pass (Python):** taint analysis tracking `os.environ` reads and wallet factory calls into `print()`, loggers, and outbound network sinks.
 
-- User uploads any third-party skill (`.zip` or GitHub URL).
-- AI + static analysis scans for:
-  - Debug prints dumping environment variables
-  - Semantic mismatches between `SKILL.md` description and actual code
-  - Credential file reads or secret handling
-- Returns a clear **Risk Score (0–100)** + detailed findings + suggested fixes.
+Output: severity-tiered findings, per-finding fix suggestions, JSON export, and a one-click **"Download Fixed"** bundle that applies real safety transformations (literal redaction, blocking unsafe calls) plus an `ESTES_PATCH.md` change log.
 
-### 2. Runtime Wrapper / Bouncer (Middleware)
+### 2. Runtime Wrapper (FastAPI middleware)
 
-- Runs as a lightweight local FastAPI proxy (`estes start`).
-- Intercepts **every tool output** before it reaches the LLM context.
-- Automatically detects and **redacts secrets** in real time.
-- Adds a warning log and optional human approval gate.
-- Keeps chat histories safe even if shared or exported.
+A lightweight proxy that runs every tool output through the same regex ruleset before it hits the LLM context. Sub-40 ms per call. Drop-in for Antigravity, Claude Code, OpenClaw. Try it live in the dashboard's **Apply Wrapper** modal.
 
-### 3. Bonus IBM-Aligned Features
+### 3. Compliance hooks
 
-- Governance Recommendations section (maps directly to watsonx.governance).
-- Simple compliance report export (JSON) for enterprise audit trails.
+Every redaction emits a structured ledger entry (`rule`, `severity`, `skill`, `action`) suitable for watsonx.governance-style policy engines and audit trails.
 
-## 🎯 Why This Matters (Hook 'Em Hacks + IBM Track)
-
-This project directly addresses the **"Security in an AI-First World"** track sponsored by IBM.
-
-It solves the exact supply-chain and runtime leakage problems IBM is highlighting with watsonx Orchestrate and Guardium AI Security. By adding observability and policy enforcement to open agent ecosystems, Estes helps enterprises adopt agentic AI safely and at scale.
-
-## 🏗️ Architecture
+## Architecture
 
 ```
 User → Antigravity / OpenClaw / Claude Code
             ↓
-   Third-party Skill runs
+   Third-party skill runs
             ↓
-   Tool Output (stdout + result)
+   Tool output (stdout + result)
             ↓
-   Estes Wrapper (localhost:8000)
+   Estes wrapper (FastAPI)
             ↓
-   Secret Detection + Redaction
+   Regex + AST detection → redaction + ledger entry
             ↓
-   Clean Output → LLM Context Window
+   Clean output → LLM context window
 ```
 
-- **Auditor**: Standalone Streamlit web app
-- **Wrapper**: FastAPI server (middleware)
-- **Integration**: Local proxy (easy to point Antigravity tool output through)
+- **Web dashboard:** single-page FastAPI + vanilla JS frontend (`web/`)
+- **Streamlit auditor:** legacy multi-page UI for deep-dive analysis (`app.py`)
+- **Runtime wrapper:** standalone FastAPI service (`wrapper.py`)
+- **Engine:** `auditor.py` — shared between all three surfaces
 
-## 🚀 Quick Start
+## Quick start
+
+### Web dashboard (recommended)
 
 ```bash
-cd /Users/robinhoesli/Desktop/projects/Estes
-
-# 1. Install dependencies
 pip install -r requirements.txt
-
-# 2. Run the Auditor (frontend + scanner)
-streamlit run app.py
-
-# 3. (Optional) Run the Runtime Wrapper
-uvicorn wrapper:app --reload
-# or, once the CLI is added:
-estes start
+uvicorn web.server:app --reload --port 5173
+# open http://localhost:5173
 ```
 
-## 📁 Project Structure
+Or just use the live deploy: [estesss.vercel.app](https://estesss.vercel.app/).
+
+### Standalone runtime wrapper
+
+```bash
+uvicorn wrapper:app --reload --port 8000
+# POST http://localhost:8000/redact  {"text": "..."}
+```
+
+### Legacy Streamlit auditor
+
+```bash
+streamlit run app.py
+```
+
+## Project structure
 
 ```
 Estes/
-├── app.py                    # Streamlit frontend + Auditor UI
-├── auditor.py                # Core skill scanning logic
-├── wrapper.py                # FastAPI runtime bouncer
-├── requirements.txt
-├── README.md
+├── api/                      # Vercel serverless entrypoint (re-exports web.server.app)
+├── web/
+│   ├── server.py             # FastAPI dashboard backend
+│   ├── index.html            # Single-page dashboard frontend
+│   └── README.md             # API + payload schema
+├── auditor.py                # Static + AST scanning engine, redact_text()
+├── wrapper.py                # Standalone runtime redaction service
+├── app.py                    # Legacy Streamlit auditor
+├── ui/                       # Streamlit components + per-rule explainers
+├── assets/                   # Logo + Streamlit CSS
 ├── demo/
-│   └── weather_tool/         # Example leaky skill for demos
-├── handoff/                  # Three-Man-Team handoff files
-└── tests/                    # (future)
+│   └── weather_tool/         # Deliberately leaky example skill
+├── handoff/                  # Project handoff notes
+├── vercel.json               # Vercel deploy config
+└── requirements.txt
 ```
 
-## 🧪 Demo Flow (for Hook 'Em Hacks judges)
+## Demo flow
 
-1. Upload the `weather_tool` from the `demo/` folder.
-2. See **High Risk** score + exact findings.
-3. Run Live Demo → **Before** (key leaks) vs **After** (Estes redacts it).
-4. Show that the chat remains safe even if shared or exported.
+1. Open [estesss.vercel.app](https://estesss.vercel.app/) (or the local server).
+2. Drop `demo/weather_tool/` (zip it first) — or any public GitHub repo URL.
+3. Watch the risk gauge animate while the scan runs (typically <2s for small skills).
+4. Inspect findings: each one shows the offending line, score impact, source pass (static / AST), and a suggested fix.
+5. Click **Download Fixed** to get a patched `.zip` with literal secrets redacted, unsafe calls commented out, and a full `ESTES_PATCH.md` change log.
+6. Click **Apply Wrapper** to run live tool output through the same redaction engine inside the dashboard.
 
-## 🛠 Tech Stack
+## Tech stack
 
-- **Frontend**: Streamlit (dark theme, neon green accents)
-- **Backend**: FastAPI + Uvicorn
-- **AI Analysis**: Grok / Claude Haiku (via API)
-- **Parsing**: Python AST + regex for debug prints
-- **Target Platforms**: Antigravity (Claude), OpenClaw, Claude Code, watsonx Orchestrate
+- **Web dashboard:** FastAPI + vanilla JS + Tailwind (CDN), single HTML file, dark agentNet-styled UI
+- **Engine:** Python AST, regex catalog, entropy heuristics — no LLM dependency
+- **Runtime wrapper:** FastAPI + Uvicorn
+- **Legacy auditor:** Streamlit
+- **Deploy:** Vercel (`@vercel/python` serverless function, stateless download path via base64-embedded zip)
 
-## 🔮 Future Roadmap (IBM Alignment)
+## Roadmap
 
-- Native watsonx.governance API integration for centralized policy & audit logging
-- Auto-patch generation (fix the skill and return a clean version)
-- Chat Shield warning before sharing/exporting conversations
-- CLI tool (`estes scan` and `estes start`)
+- Native watsonx.governance API integration for centralized policy and audit logging
+- TypeScript/JavaScript AST pass (currently Python-only for taint flow)
+- CLI (`estes scan <path>` / `estes start`)
+- Signed allowlists and policy-as-code
+- Chat Shield warning before sharing or exporting agent conversations
 
-## 📌 Built For
+## Built for
 
-- **Hook 'Em Hacks 2026** — *Security in an AI-First World* track (IBM Sponsored)
-- Real developers using Antigravity, OpenClaw, and agent marketplaces
-- Enterprises deploying agentic AI securely
+- **Hook 'Em Hacks 2026** — *Security in an AI-First World* track (IBM-sponsored)
+- Developers using Antigravity, OpenClaw, Claude Code, and agent marketplaces
+- Enterprises deploying agentic AI safely and at scale
 
 ---
 
-*Project created by Robin Ho (for Hook 'Em Hacks 2026)*
-*Last updated: April 18, 2026*
+*Built by Robin Ho for Hook 'Em Hacks 2026 · Live at [estesss.vercel.app](https://estesss.vercel.app/)*
