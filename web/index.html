@@ -65,25 +65,6 @@
   /* Background canvas + sweep beams sit above the wash, below content */
   #bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
-  .beams { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-  .beams .beam {
-    position: absolute;
-    left: -20%; width: 140%; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0,255,157,0.45), transparent);
-    opacity: 0;
-    animation: sweep 22s linear infinite;
-  }
-  .beams .b1 { top: 22%; animation-delay: 0s;  }
-  .beams .b2 { top: 64%; animation-delay: 9s;  animation-duration: 26s; }
-  .beams .b3 { top: 88%; animation-delay: 16s; animation-duration: 30s; }
-
-  @keyframes sweep {
-    0%   { transform: translateX(-30%); opacity: 0; }
-    25%  { opacity: 0.6; }
-    75%  { opacity: 0.6; }
-    100% { transform: translateX(30%); opacity: 0; }
-  }
-
   /* ----------  Layout  ---------- */
   .container-x { max-width: 1180px; margin-inline: auto; padding-inline: clamp(20px, 4vw, 40px); }
 
@@ -347,6 +328,103 @@
     letter-spacing: 0.24em;
   }
 
+  /* ----------  Pills (severity + source)  ---------- */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono';
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border: 1px solid var(--line);
+    color: var(--text-mute);
+    background: transparent;
+  }
+  .pill.sev-high { color: var(--danger); border-color: rgba(255,92,122,0.4); }
+  .pill.sev-warn { color: var(--warn);   border-color: rgba(255,209,102,0.4); }
+  .pill.sev-info { color: var(--text-mute); }
+  .pill.src      { color: var(--text);   border-color: rgba(255,255,255,0.14); }
+
+  /* ----------  Finding card  ---------- */
+  .finding {
+    border-radius: 12px;
+    background: #060b0d;
+    border: 1px solid var(--line);
+    transition: border-color .35s ease, box-shadow .35s ease;
+  }
+  .finding:hover { border-color: var(--line-hover); box-shadow: 0 0 0 1px rgba(0,255,157,0.10); }
+  .finding > header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .finding > header .file {
+    font-family: 'JetBrains Mono';
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .finding > header .file .ln { color: var(--text-dim); }
+  .finding > header .rule {
+    margin-left: auto;
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.16em;
+  }
+  .finding > .body {
+    padding: 18px 20px 22px;
+    display: grid;
+    gap: 18px;
+  }
+  .finding .lbl {
+    font-family: 'JetBrains Mono';
+    font-size: 10.5px;
+    letter-spacing: 0.28em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .finding .why { color: var(--text); font-size: 13.5px; line-height: 1.6; }
+  .finding .why .em { color: var(--text); }
+  .finding .why .neon { color: var(--neon); }
+
+  .code.compact { padding: 12px 14px; font-size: 12px; line-height: 1.7; }
+  .code .hl {
+    display: inline-block;
+    background: rgba(255,92,122,0.10);
+    border-left: 2px solid var(--danger);
+    padding: 0 6px;
+    margin-left: -8px;
+    color: #ffd1d8;
+  }
+  .code .add {
+    color: var(--neon);
+  }
+
+  /* ----------  Action bar  ---------- */
+  .action-bar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 14px;
+    padding: 16px 20px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #060b0d;
+    margin-bottom: 22px;
+  }
+  .action-bar .meta {
+    display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+    font-family: 'JetBrains Mono';
+    font-size: 12px;
+    color: var(--text-mute);
+  }
+  .action-bar .meta b { color: #fff; font-weight: 500; }
+  .action-bar .meta .sep { color: var(--text-dim); }
+
+  /* ----------  Hidden helper  ---------- */
+  .is-hidden { display: none !important; }
+
   /* ----------  Reduced motion  ---------- */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -365,11 +443,6 @@
 <!-- Background layers -->
 <div class="top-wash"></div>
 <canvas id="bg-canvas"></canvas>
-<div class="beams" aria-hidden="true">
-  <div class="beam b1"></div>
-  <div class="beam b2"></div>
-  <div class="beam b3"></div>
-</div>
 
 <!-- ====================  HEADER  ==================== -->
 <header class="relative z-10">
@@ -451,23 +524,25 @@
             <span class="text-[12px] text-[color:var(--text-dim)] font-mono tracking-widest">SCAN&nbsp;#2087</span>
           </div>
 
-          <label id="drop" class="drop block cursor-pointer">
-            <input id="file" type="file" class="hidden" />
+          <input id="file" type="file" class="hidden" accept=".zip,.py,.js,.ts,.json,.yaml,.yml,.md,.txt" />
+
+          <div id="drop" class="drop" role="button" tabindex="0" aria-label="Upload a skill (.zip or source file)">
             <svg class="ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M14 30 v6 a4 4 0 0 0 4 4 h12 a4 4 0 0 0 4 -4 v-6"/>
               <path d="M24 8 v22"/>
               <path d="M16 16 l8 -8 l8 8"/>
             </svg>
-            <div class="text-[17px] text-white font-medium">Drop a third-party skill here</div>
-            <div class="mt-2 text-[13px] text-[color:var(--text-mute)]">.zip archive or single source file — up to 25&nbsp;MB</div>
+            <div class="text-[17px] text-white font-medium" id="drop-title">Drop a third-party skill here</div>
+            <div class="mt-2 text-[13px] text-[color:var(--text-mute)]" id="drop-sub">.zip archive or single source file — up to 25&nbsp;MB</div>
+          </div>
 
+          <div class="text-center">
             <div class="or">— or —</div>
-
-            <div class="url-row" onclick="event.stopPropagation()">
+            <div class="url-row">
               <input id="url" type="text" placeholder="https://github.com/owner/repo" />
               <button type="button" id="scan-btn" class="btn btn-primary !h-[42px] !px-5">Scan</button>
             </div>
-          </label>
+          </div>
 
           <div class="mt-6 flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--text-dim)] font-mono">
             <span class="badge"><span class="pip"></span>SAFE FOR PROD</span>
@@ -482,8 +557,8 @@
         <div class="card-pad">
           <div class="flex items-center justify-between mb-6">
             <span class="num-tag">[ RISK SCORE ]</span>
-            <span id="gauge-state" class="gauge-state is-danger">
-              <span class="pip"></span><span id="gauge-state-label">High</span>
+            <span id="gauge-state" class="gauge-state">
+              <span class="pip"></span><span id="gauge-state-label">Idle</span>
             </span>
           </div>
 
@@ -491,33 +566,64 @@
             <svg viewBox="0 0 200 200">
               <circle cx="100" cy="100" r="86" stroke-width="10" fill="none" class="gauge-track"/>
               <circle cx="100" cy="100" r="86" stroke-width="10" fill="none"
-                      class="gauge-fill is-danger"
+                      class="gauge-fill"
                       pathLength="100"
                       stroke-dasharray="100 100"
                       stroke-dashoffset="100"
                       id="gauge-fill"/>
             </svg>
             <div class="gauge-center">
-              <div class="num" id="gauge-num">0</div>
-              <div class="lbl">/ 100 risk</div>
+              <div class="num" id="gauge-num">—</div>
+              <div class="lbl" id="gauge-lbl">awaiting scan</div>
             </div>
           </div>
 
           <div class="mt-6 grid grid-cols-3 text-center">
             <div class="border-r border-white/[0.05] py-2">
-              <div class="font-mono text-[16px] text-white">3</div>
+              <div class="font-mono text-[16px] text-white" id="cnt-high">—</div>
               <div class="text-[10.5px] text-[color:var(--text-dim)] tracking-[0.2em] uppercase mt-1">High</div>
             </div>
             <div class="border-r border-white/[0.05] py-2">
-              <div class="font-mono text-[16px] text-white">5</div>
+              <div class="font-mono text-[16px] text-white" id="cnt-warn">—</div>
               <div class="text-[10.5px] text-[color:var(--text-dim)] tracking-[0.2em] uppercase mt-1">Warn</div>
             </div>
             <div class="py-2">
-              <div class="font-mono text-[16px] text-white">11</div>
+              <div class="font-mono text-[16px] text-white" id="cnt-info">—</div>
               <div class="text-[10.5px] text-[color:var(--text-dim)] tracking-[0.2em] uppercase mt-1">Info</div>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ====================  FINDINGS (revealed after scan)  ==================== -->
+    <div id="findings" class="is-hidden mt-12">
+      <div class="action-bar">
+        <div class="meta">
+          <span class="num-tag">[ FINDINGS ]</span>
+          <span><b id="ab-total">0</b>&nbsp;detected</span>
+          <span class="sep">·</span>
+          <span><b id="ab-source">—</b></span>
+          <span class="sep">·</span>
+          <span>scan&nbsp;in&nbsp;<b id="ab-time">—</b></span>
+          <span class="sep">·</span>
+          <span><b id="ab-files">0</b>&nbsp;files</span>
+          <span class="sep">·</span>
+          <span id="ab-llm">LLM&nbsp;off</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-apply"    type="button" class="btn"><span class="dot"></span>Apply Wrapper</button>
+          <button id="btn-download" type="button" class="btn btn-primary">Download Fixed
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="findings-list" class="grid gap-4"></div>
+
+      <div id="findings-footer" class="mt-6 flex items-center justify-between flex-wrap gap-3 text-[12.5px] text-[color:var(--text-dim)] font-mono">
+        <span id="findings-count-line"></span>
+        <a href="#" id="show-all" class="nav-link"></a>
       </div>
     </div>
   </div>
@@ -742,86 +848,360 @@
     });
   });
 
-  /* ----------  Drop zone interactions  ---------- */
+  /* ----------  Risk gauge  ---------- */
+  function colorClassFor(score) {
+    if (score < 40) return { stroke: '',           state: 'is-safe',   label: 'Safe' };
+    if (score < 70) return { stroke: 'is-warn',    state: 'is-warn',   label: 'Warning' };
+    return                  { stroke: 'is-danger', state: 'is-danger', label: 'High' };
+  }
+  function resetGauge() {
+    const fill = document.getElementById('gauge-fill');
+    const num  = document.getElementById('gauge-num');
+    const lbl  = document.getElementById('gauge-lbl');
+    const stateEl  = document.getElementById('gauge-state');
+    const stateLbl = document.getElementById('gauge-state-label');
+    fill.classList.remove('is-warn','is-danger');
+    fill.setAttribute('stroke-dashoffset', 100);
+    num.textContent = '—';
+    lbl.textContent = 'awaiting scan';
+    stateEl.classList.remove('is-safe','is-warn','is-danger');
+    stateLbl.textContent = 'Idle';
+    document.getElementById('cnt-high').textContent = '—';
+    document.getElementById('cnt-warn').textContent = '—';
+    document.getElementById('cnt-info').textContent = '—';
+  }
+  function runGauge(score, counts) {
+    const fill = document.getElementById('gauge-fill');
+    const num  = document.getElementById('gauge-num');
+    const lbl  = document.getElementById('gauge-lbl');
+    const stateEl  = document.getElementById('gauge-state');
+    const stateLbl = document.getElementById('gauge-state-label');
+    if (!fill) return;
+
+    const c = colorClassFor(score);
+    fill.classList.remove('is-warn','is-danger'); if (c.stroke) fill.classList.add(c.stroke);
+    stateEl.classList.remove('is-safe','is-warn','is-danger'); stateEl.classList.add(c.state);
+    stateLbl.textContent = c.label;
+    lbl.textContent = '/ 100 risk';
+
+    fill.setAttribute('stroke-dashoffset', 100 - score);
+
+    const start = performance.now(), dur = 1300;
+    function tick(t) {
+      const k = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - k, 3);
+      num.textContent = Math.round(score * eased);
+      if (k < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    if (counts) {
+      document.getElementById('cnt-high').textContent = counts.high;
+      document.getElementById('cnt-warn').textContent = counts.warn;
+      document.getElementById('cnt-info').textContent = counts.info;
+    }
+  }
+
+  /* ----------  Drop zone  ---------- */
   (function () {
     const drop = document.getElementById('drop');
     const file = document.getElementById('file');
     const url  = document.getElementById('url');
-    if (!drop) return;
+    const btn  = document.getElementById('scan-btn');
+    const dropTitle = document.getElementById('drop-title');
+    const dropSub   = document.getElementById('drop-sub');
+    if (!drop || !file) return;
 
-    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
-      e.preventDefault(); e.stopPropagation(); drop.classList.add('is-drag');
-    }));
-    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, (e) => {
-      e.preventDefault(); e.stopPropagation(); drop.classList.remove('is-drag');
-    }));
-    drop.addEventListener('drop', (e) => {
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) flashScan('Queued: ' + f.name);
+    // Window-level guard: prevent the browser from navigating away when a
+    // file is dropped outside the zone.
+    ['dragover','drop'].forEach(ev => {
+      window.addEventListener(ev, (e) => { e.preventDefault(); }, false);
     });
-    file && file.addEventListener('change', () => {
-      const f = file.files && file.files[0];
-      if (f) flashScan('Queued: ' + f.name);
+
+    // Click anywhere on the zone → open file picker.
+    drop.addEventListener('click', () => file.click());
+    drop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); }
     });
-    document.getElementById('scan-btn').addEventListener('click', (e) => {
+
+    let dragDepth = 0;
+    drop.addEventListener('dragenter', (e) => {
       e.preventDefault();
-      flashScan(url.value ? 'Scanning ' + url.value : 'Choose a file or paste a URL');
+      dragDepth++;
+      drop.classList.add('is-drag');
+    });
+    drop.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+    drop.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) drop.classList.remove('is-drag');
+    });
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      drop.classList.remove('is-drag');
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) handleFile(f);
     });
 
-    function flashScan(msg) {
+    file.addEventListener('change', () => {
+      const f = file.files && file.files[0];
+      if (f) handleFile(f);
+    });
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const u = (url.value || '').trim();
+      if (!u) {
+        flash('Choose a file or paste a GitHub URL');
+        url.focus();
+        return;
+      }
+      runScanUrl(u);
+    });
+    url.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); btn.click(); }
+    });
+
+    function handleFile(f) {
+      dropTitle.textContent = f.name;
+      const kb = f.size < 1024 * 1024
+        ? Math.max(1, Math.round(f.size / 1024)) + ' KB'
+        : (f.size / (1024 * 1024)).toFixed(1) + ' MB';
+      dropSub.textContent = kb + ' · ready to scan';
+      runScanFile(f);
+    }
+
+    let CURRENT_SCAN = null;   // last payload returned from the API
+    let SHOWING_ALL  = false;
+
+    async function runScanFile(file) {
+      flash('Uploading ' + file.name + '…');
+      resetGauge(); hideFindings();
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const r = await fetch('/api/scan/file', { method: 'POST', body: fd });
+        if (!r.ok) throw new Error(await r.text() || ('HTTP ' + r.status));
+        const payload = await r.json();
+        applyScanPayload(payload);
+      } catch (e) {
+        scanFailed(e);
+      }
+    }
+
+    async function runScanUrl(u) {
+      flash('Scanning ' + u + '…');
+      resetGauge(); hideFindings();
+      try {
+        const r = await fetch('/api/scan/url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: u }),
+        });
+        if (!r.ok) throw new Error(await r.text() || ('HTTP ' + r.status));
+        const payload = await r.json();
+        applyScanPayload(payload);
+      } catch (e) {
+        scanFailed(e);
+      }
+    }
+
+    function scanFailed(e) {
+      console.error('[estes] scan failed:', e);
+      flash('Scan failed · ' + (e.message || 'unknown error'));
+      resetGauge();
+      // Surface a hint when the backend isn't running.
+      if (String(e.message || '').includes('Failed to fetch')) {
+        flash('Backend offline · run `uvicorn web.server:app --port 5173`');
+      }
+    }
+
+    function applyScanPayload(p) {
+      CURRENT_SCAN = p;
+      SHOWING_ALL = false;
+
+      const counts = p.counts || {};
+      const totalHigh = (counts.high || 0) + (counts.critical || 0);
+      runGauge(p.risk_score || 0, {
+        high: totalHigh, warn: counts.warning || 0, info: counts.info || 0,
+      });
+
+      // Action bar meta
+      document.getElementById('ab-total').textContent = (p.findings || []).length;
+      document.getElementById('ab-source').textContent = p.label || '—';
+      document.getElementById('ab-time').textContent =
+        ((p.duration_ms || 0) / 1000).toFixed(1) + 's';
+      document.getElementById('ab-files').textContent = p.files_scanned || 0;
+      document.getElementById('ab-llm').textContent =
+        p.llm_used ? ('LLM ' + (p.llm_provider || 'on')) : 'LLM off';
+
+      // Download availability
+      const dl = document.getElementById('btn-download');
+      dl.disabled = !p.can_download;
+      dl.style.opacity = p.can_download ? '1' : '0.45';
+      dl.style.cursor  = p.can_download ? 'pointer' : 'not-allowed';
+      dl.title = p.can_download ? '' : 'Download is only available for uploaded files.';
+
+      renderFindings();
+      showFindingsPanel();
+
+      const sev = (p.severity || 'Safe');
+      flash(`Scan complete · ${sev} · ${p.risk_score}/100`);
+    }
+
+    function hideFindings() {
+      const f = document.getElementById('findings');
+      if (f) f.classList.add('is-hidden');
+    }
+    function showFindingsPanel() {
+      const f = document.getElementById('findings');
+      if (!f) return;
+      f.classList.remove('is-hidden');
+      f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /* ----------  Render findings  ---------- */
+    const SEV_LABEL = { critical: 'Critical', high: 'High', warning: 'Warn', info: 'Info' };
+    const SEV_PILL  = { critical: 'sev-high', high: 'sev-high', warning: 'sev-warn', info: 'sev-info' };
+    const SRC_LABEL = { static: 'Static', ast: 'AST', llm: 'LLM' };
+    const RANK      = { critical: 4, high: 3, warning: 2, info: 1 };
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function highlightSnippet(snippet, line) {
+      // The auditor stores a single offending line in `snippet`. Show a
+      // 3-line "context window" that just labels the hot line.
+      if (!snippet) return '<span class="dim">(no snippet)</span>';
+      const safe = esc(snippet).trimEnd();
+      const ln = line || '?';
+      return `<span class="dim">${String(ln).padStart(3,' ')} │</span> <span class="hl">${safe}</span>`;
+    }
+    function renderFindings() {
+      const list = document.getElementById('findings-list');
+      const footer = document.getElementById('findings-count-line');
+      const showAll = document.getElementById('show-all');
+      if (!list) return;
+      list.innerHTML = '';
+
+      const all = (CURRENT_SCAN && CURRENT_SCAN.findings) || [];
+      if (all.length === 0) {
+        list.innerHTML = `
+          <article class="finding"><div class="body">
+            <div class="lbl">All clear</div>
+            <p class="why">No findings. The scanner ran <b>${CURRENT_SCAN.files_scanned || 0}</b>
+            file(s) through static, AST, and LLM passes and found nothing actionable.</p>
+          </div></article>`;
+        footer.textContent = '0 findings';
+        showAll.textContent = '';
+        return;
+      }
+
+      // High-severity first, then warnings, then info; preserve auditor order within ties.
+      const ranked = all.slice().sort((a, b) => (RANK[b.severity] || 0) - (RANK[a.severity] || 0));
+      const visible = SHOWING_ALL ? ranked : ranked.slice(0, 6);
+
+      const html = visible.map((f, i) => {
+        const sevCls = SEV_PILL[f.severity] || 'sev-info';
+        const sevLbl = SEV_LABEL[f.severity] || f.severity;
+        const srcLbl = SRC_LABEL[f.source]   || f.source;
+        const fileStr = f.file
+          ? `${esc(f.file)}<span class="ln">:${f.line || 0}</span>`
+          : `<span class="dim">(skill root)</span>`;
+        const fix = (f.suggested_fix || '').trim();
+        const fixBlock = fix
+          ? `<div>
+               <div class="lbl">Suggested fix</div>
+               <pre class="code compact">${esc(fix)}</pre>
+             </div>`
+          : '';
+        const evidenceBlock = f.snippet
+          ? `<div>
+               <div class="lbl">Evidence</div>
+               <pre class="code compact">${highlightSnippet(f.snippet, f.line)}</pre>
+             </div>`
+          : '';
+        const weight = f.weight || 0;
+        const why = `${esc(f.message || 'See rule documentation.')}
+          ${weight ? `<span class="neon">&nbsp;Severity weight: +${weight}</span>` : ''}`;
+
+        return `
+          <article class="finding">
+            <header>
+              <span class="pill ${sevCls}">${sevLbl}</span>
+              <span class="pill src">${srcLbl}</span>
+              <span class="file">${fileStr}</span>
+              <span class="rule">${esc(f.id || f.category || '')}</span>
+            </header>
+            <div class="body">
+              ${evidenceBlock}
+              <div>
+                <div class="lbl">Why this lowers your score</div>
+                <p class="why">${why}</p>
+              </div>
+              ${fixBlock}
+            </div>
+          </article>`;
+      }).join('');
+      list.innerHTML = html;
+
+      const counts = CURRENT_SCAN.counts || {};
+      const total = all.length;
+      const shown = visible.length;
+      footer.innerHTML = `Showing <b>${shown}</b> of <b>${total}</b> &nbsp;—
+        <span class="text-[color:var(--text-mute)]">
+          ${counts.critical||0} Critical · ${counts.high||0} High ·
+          ${counts.warning||0} Warning · ${counts.info||0} Info
+        </span>`;
+      showAll.textContent = (shown < total) ? `Show all ${total} findings →` : '';
+      showAll.style.display = (shown < total) ? '' : 'none';
+    }
+
+    document.getElementById('show-all').addEventListener('click', (e) => {
+      e.preventDefault();
+      SHOWING_ALL = true;
+      renderFindings();
+    });
+
+    document.getElementById('btn-apply').addEventListener('click', () => {
+      flash('Wrapper instructions: `uvicorn wrapper:app --port 8000` then point your agent at it.');
+    });
+    document.getElementById('btn-download').addEventListener('click', () => {
+      if (!CURRENT_SCAN || !CURRENT_SCAN.can_download) {
+        flash('Download is only available for uploaded files.');
+        return;
+      }
+      const url = `/api/download/${encodeURIComponent(CURRENT_SCAN.scan_id)}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'skill_fixed.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      flash('Fixed bundle downloading…');
+    });
+
+    function flash(msg) {
       const note = document.createElement('div');
       note.textContent = msg;
       note.style.cssText = `
         position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
-        background: rgba(7,13,16,0.95); border: 1px solid rgba(0,255,157,0.4);
+        background: #070d10; border: 1px solid rgba(0,255,157,0.4);
         color: #eaf3ee; font-family: 'JetBrains Mono'; font-size: 12px;
         padding: 10px 14px; border-radius: 999px; z-index: 50;
-        box-shadow: 0 0 24px rgba(0,255,157,0.3);
+        box-shadow: 0 0 24px rgba(0,255,157,0.25);
         opacity: 0; transition: opacity .35s ease;
       `;
       document.body.appendChild(note);
       requestAnimationFrame(() => { note.style.opacity = '1'; });
-      setTimeout(() => { note.style.opacity = '0'; setTimeout(() => note.remove(), 400); }, 1800);
+      setTimeout(() => { note.style.opacity = '0'; setTimeout(() => note.remove(), 400); }, 1700);
     }
   })();
-
-  /* ----------  Risk gauge  ---------- */
-  const TARGET_SCORE = 78;
-  function colorClassFor(score) {
-    if (score < 40) return { stroke: '', state: 'is-safe',   label: 'Safe' };
-    if (score < 70) return { stroke: 'is-warn',   state: 'is-warn',   label: 'Warning' };
-    return                  { stroke: 'is-danger', state: 'is-danger', label: 'High' };
-  }
-  function animateGauge() {
-    const fill = document.getElementById('gauge-fill');
-    const num  = document.getElementById('gauge-num');
-    const stateEl = document.getElementById('gauge-state');
-    const stateLbl = document.getElementById('gauge-state-label');
-    if (!fill || !num) return;
-
-    const c = colorClassFor(TARGET_SCORE);
-    fill.classList.remove('is-warn','is-danger'); if (c.stroke) fill.classList.add(c.stroke);
-    stateEl.classList.remove('is-safe','is-warn','is-danger'); stateEl.classList.add(c.state);
-    stateLbl.textContent = c.label;
-
-    fill.setAttribute('stroke-dashoffset', 100 - TARGET_SCORE);
-
-    const start = performance.now(), dur = 1500;
-    function tick(t) {
-      const k = Math.min(1, (t - start) / dur);
-      const eased = 1 - Math.pow(1 - k, 3);
-      num.textContent = Math.round(TARGET_SCORE * eased);
-      if (k < 1) requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  }
-  const gaugeWrap = document.getElementById('gauge');
-  if (gaugeWrap) {
-    const gIO = new IntersectionObserver((entries) => {
-      entries.forEach((e) => { if (e.isIntersecting) { animateGauge(); gIO.disconnect(); } });
-    }, { threshold: 0.4 });
-    gIO.observe(gaugeWrap);
-  }
 
   /* ----------  Shared helpers  ---------- */
   // Pre-render a glow sprite once; drawImage is ~10x cheaper than per-frame shadowBlur.
