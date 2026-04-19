@@ -1,4 +1,4 @@
-# Review Request — Step 0
+# Review Request — Step 1
 *Written by Builder. Read by Reviewer.*
 
 Ready for Review: YES
@@ -7,37 +7,76 @@ Ready for Review: YES
 
 ## What Was Built
 
-A working Phase 0 SkillBouncer skeleton: a Streamlit Auditor (`app.py`) that uploads and scans a skill, a shared scan library (`auditor.py`) with six regex rules, a FastAPI Runtime Wrapper (`wrapper.py`) exposing `/health`, `/redact`, and `/scan`, a top-level `README.md`, a pinned `requirements.txt`, and a deliberately-leaky demo skill at `demo/weather_tool/` so the scanner has something obvious to find. All modules parse cleanly (`python3 -m ast` over the four `.py` files passes).
+Full implementation of the Step 1 auditor module per `handoff/auditor_design.md`, staged at `handoff/auditor.py` (does NOT yet replace the running root `auditor.py` — Architect / Project Owner must move it after sign-off).
+
+Highlights:
+- Public API: `scan_skill(source, *, llm=True, timeout_s=30, max_bytes=5MB) -> ScanReport` accepts a local file, directory, `.zip`, or public GitHub URL (including `/tree/<branch>/<subpath>` form).
+- Three detection passes feeding one `ScanReport`: Pass A (regex + Shannon entropy + `# skillbouncer: ignore` directive), Pass B (Python AST visitor with env-var symbol table tracking), Pass C (Anthropic Claude Haiku or xAI Grok semantic check, fully optional).
+- `_safe_extract` rejects path traversal, absolute paths, symlinks, oversized entries, and aborts at `max_bytes` (closes KG-6).
+- Risk score formula: `min(100, 40·high + 12·warning + 3·info)` with `Safe` / `Warning` / `High Risk` bands (closes KG-5).
+- Backwards compatible: `SECRET_PATTERNS`, `scan_text`, `scan_path`, `redact_text` preserved with same signatures so `wrapper.py` and `app.py` keep working unchanged.
+- LLM pass is degradable: with no API key (or `SKILLBOUNCER_LLM_PROVIDER=off`), the pass writes one warning string and returns; `report.llm_used = False`. Never raises.
 
 ## Files Changed
 
 | File | Lines | Change |
 |---|---|---|
-| `requirements.txt` | 1-7 | Pinned: streamlit, fastapi, uvicorn, pydantic, python-dotenv, requests, PyYAML. |
-| `auditor.py` | 1-117 | New: `SECRET_PATTERNS` regex pack, `Finding`/`ScanResult` dataclasses, `scan_text`/`scan_path`/`redact_text` helpers, risk score + label. |
-| `app.py` | 1-79 | New: Streamlit UI; accepts file or `.zip`, extracts to a temp dir, calls `scan_path`, renders score/files/verdict + findings table. |
-| `wrapper.py` | 1-68 | New: FastAPI app; `GET /`, `GET /health`, `POST /redact`, `POST /scan`. Imports ruleset from `auditor`. |
-| `README.md` | 1-44 | New: problem, architecture, install, run, demo pointer, status. |
-| `demo/weather_tool/weather.py` | 1-37 | New: leaky example skill (3 credential leaks: 2x `print`, 1x `logger.debug`). Fake placeholder values only. |
-| `demo/weather_tool/SKILL.md` | 1-28 | New: describes the demo skill and the three leak vectors. |
-| `handoff/BUILD-LOG.md` | full rewrite | Step 0 set to READY FOR REVIEW; added D-1..D-5 deviation notes; added KG-1..KG-6; added AD-6. |
+| `handoff/auditor.py` | 1-870 | New (staged). Full Step 1 implementation. |
+| `handoff/BUILD-LOG.md` | full rewrite | Step 1 entry, KG-1/2/5/6/7 marked addressed, KG-8 added (demo SKILL.md self-flagging unresolved). |
+| `handoff/REVIEW-REQUEST.md` | this file | Step 1 review request. |
+
+Detailed line ranges within `handoff/auditor.py`:
+
+| Section | Lines |
+|---|---|
+| Imports + dotenv | 30-52 |
+| Constants (suffixes, skip dirs, manifest names, ignore directive, allowlists) | 55-93 |
+| `SECRET_PATTERNS` + `_STATIC_RULE_META` (Phase 0 ruleset preserved + rule IDs) | 96-148 |
+| Data model: `Finding`, `SkillManifest`, `ScanReport` (+ `to_dict` / `to_json`) | 151-205 |
+| Pass A — `_scan_static` (regex + entropy + ignore) | 208-281 |
+| Pass B — AST helpers (`_flatten_attr`, `_LeakVisitor`, `_scan_ast`) | 284-453 |
+| Pass C — LLM (`_call_anthropic`, `_call_xai`, `_parse_llm_json`, `_llm_semantic_check`) | 456-606 |
+| Source resolution (`_parse_github_url`, `_fetch_github_zip`, `_safe_extract`, `_resolve_source`) | 609-771 |
+| Discovery (`_discover_manifest`, `_discover_files`) | 774-833 |
+| Aggregation (`_compute_score`, `_compute_severity`, `_rollup_suggested_fix`, `_dedupe`) | 836-878 |
+| Public API (`scan_skill`, `scan_path`, `redact_text`, `__all__`) | 881-end |
+
+## Smoke Tests Run
+
+All passed:
+
+1. `scan_skill('demo/weather_tool', llm=False)` → severity=`High Risk`, score=100, files=2, **3 high AST findings** (`SB-PRINT-ENV-01` ×2 + `SB-LOG-ENV-01`) + bonus `SB-NET-PHONEHOME-01` warning + 6 static findings. Symbol table correctly resolves `API_KEY = os.environ.get(...)` then `print(f"...{API_KEY}...")`.
+2. Clean fixture (harmless skill) → severity=`Safe`, score=0, 0 findings.
+3. Zip with `../../etc/passwd_pwned` entry → entry rejected with warning, no escape, no findings.
+4. File with `api_key = "abcdef1234567890XYZ"  # skillbouncer: ignore` → 0 findings (KG-7 closed).
+5. `report.to_json()` → 5,808-char JSON, round-trips cleanly through `json.loads`.
 
 ## Open Questions
 
-1. **Project Owner override of original brief.** Five deviations are logged as D-1..D-5 in BUILD-LOG. The most material:
-   - Real (minimal) detection logic shipped in Step 0 instead of pure placeholders, because the demo needs something to detect.
-   - `demo/` subdirectory created (original brief flagged "no new subdirectories").
-   - Demo skill contains fake-but-secret-shaped strings (original brief flagged "no secret-shaped strings"). Strings are obvious dummies (`wx_fake_demo_key_...`).
-   Reviewer: please confirm the deviations are acceptable or escalate to Architect.
-2. **Risk score formula** is `min(100, n_findings * 20)` — naive, no severity weighting. KG-5 logged.
-3. **No tests.** Demo skill is the only smoke test. KG-4 logged.
-4. **`zipfile.extractall` in `app.py` is unguarded** — no path-traversal or zip-bomb defense. Acceptable for local dev tool? KG-6 logged.
+1. **Swap-in instruction**. The brief said write to `handoff/auditor.py`. The running code in the repo root is unchanged. After Reviewer signs off, the activation step is:
+
+   ```bash
+   cd /Users/robinhoesli/Desktop/projects/SkillBouncer
+   mv handoff/auditor.py auditor.py
+   ```
+
+   `wrapper.py` and `app.py` need no changes — the new module preserves every Phase 0 export.
+
+2. **LLM default unresolved.** Architect's design left this as an open question for Project Owner. Builder defaulted `scan_skill(llm=True)` per Architect's recommendation; `scan_path()` (compatibility shim used by Streamlit + FastAPI) stays `llm=False`. Confirm or reverse before Step 2.
+
+3. **Demo `SKILL.md` self-flagging (KG-8).** The new ignore directive can fix this if added to the SKILL.md, but Step 1 deliberately did not modify the demo. Project Owner: do you want the demo SKILL.md left noisy (so the score reads 100 for the demo), or cleaned with `# skillbouncer: ignore` markers (so the score reads ~60 from the actual code)?
+
+4. **Bonus AST rule fired on demo**. `SB-NET-PHONEHOME-01` (warning) fires on `requests.get("https://api.weatherapi.com/...")` because the function also touches env vars. This is correct per spec but wasn't called out in the demo brief. Acceptable?
+
+5. **Tests**. KG-4 still open — the smoke tests above are ad-hoc. Recommend adding `pytest` + `tests/fixtures/` (zip-bomb, traversal, clean, leaky weather, missing manifest) as Step 1.5. Should this block Step 1 deploy?
 
 ## Known Gaps Logged
 
-- KG-1 — No Shannon entropy pass.
-- KG-2 — No Python AST pass (`eval`, `exec`, `os.system`, etc. not flagged).
-- KG-3 — No live Antigravity hook; `/redact` is a manual POST.
-- KG-4 — No automated tests.
-- KG-5 — Naive risk score formula.
-- KG-6 — `zipfile.extractall` is unguarded.
+- KG-1 — Entropy: ADDRESSED in Step 1.
+- KG-2 — AST: ADDRESSED in Step 1.
+- KG-3 — Antigravity hook: still open (Step 2).
+- KG-4 — Automated tests: still open (proposed Step 1.5).
+- KG-5 — Risk score formula: ADDRESSED in Step 1.
+- KG-6 — Zip-bomb / path-traversal: ADDRESSED in Step 1.
+- KG-7 — `# skillbouncer: ignore`: ADDRESSED in Step 1.
+- KG-8 — Demo SKILL.md still self-flags (new): pending Project Owner call (see Open Question 3).
