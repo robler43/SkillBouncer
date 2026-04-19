@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="SkillBouncer">
+  <path d="M20 4 L33 8 V19 C33 26.5 27.5 32.5 20 35 C12.5 32.5 7 26.5 7 19 V8 Z" />
+  <path d="M14 18 H26" />
+  <path d="M14 23 H22" />
+  <path d="M28 27 L31 32 L25 30 Z" fill="currentColor" stroke="none" opacity="0.85" />
+</svg>

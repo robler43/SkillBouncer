@@ -1,4 +1,4 @@
-# Review Request — Step 1
+# Review Request — Step 2 (Dashboard rewrite)
 *Written by Builder. Read by Reviewer.*
 
 Ready for Review: YES
@@ -7,76 +7,76 @@ Ready for Review: YES
 
 ## What Was Built
 
-Full implementation of the Step 1 auditor module per `handoff/auditor_design.md`, staged at `handoff/auditor.py` (does NOT yet replace the running root `auditor.py` — Architect / Project Owner must move it after sign-off).
+A complete dark-mode dashboard implementing `handoff/ui_design.md` end-to-end. The surface area:
 
-Highlights:
-- Public API: `scan_skill(source, *, llm=True, timeout_s=30, max_bytes=5MB) -> ScanReport` accepts a local file, directory, `.zip`, or public GitHub URL (including `/tree/<branch>/<subpath>` form).
-- Three detection passes feeding one `ScanReport`: Pass A (regex + Shannon entropy + `# skillbouncer: ignore` directive), Pass B (Python AST visitor with env-var symbol table tracking), Pass C (Anthropic Claude Haiku or xAI Grok semantic check, fully optional).
-- `_safe_extract` rejects path traversal, absolute paths, symlinks, oversized entries, and aborts at `max_bytes` (closes KG-6).
-- Risk score formula: `min(100, 40·high + 12·warning + 3·info)` with `Safe` / `Warning` / `High Risk` bands (closes KG-5).
-- Backwards compatible: `SECRET_PATTERNS`, `scan_text`, `scan_path`, `redact_text` preserved with same signatures so `wrapper.py` and `app.py` keep working unchanged.
-- LLM pass is degradable: with no API key (or `SKILLBOUNCER_LLM_PROVIDER=off`), the pass writes one warning string and returns; `report.llm_used = False`. Never raises.
+- `app.py` — full rewrite. Layout + state plumbing only; no scan logic in this file.
+- `.streamlit/config.toml` — dark theme + `#22ff88` primary color baseline.
+- `assets/styles.css` — single 9.5 KB stylesheet, zero hard-coded hex codes (every color resolves through `:root` CSS variables emitted by `ui/theme.py`).
+- `assets/logo.svg` — 40×40 shield + chat-bubble notch (single-color stroke).
+- `ui/theme.py` — palette + severity tokens + `theme_css_variables()` for the CSS-var emitter.
+- `ui/components.py` — every render helper (`render_header`, `render_empty_state`, `render_score_panel`, `render_fix_banner`, `render_warnings`, `render_findings_list`, `render_finding_card`, `inject_styles`). All HTML interpolations go through `html.escape()`.
+
+Step 1 (auditor close-out) is also fully deployed in this turn: MF-1 and MF-2 cleared, `handoff/auditor.py` swapped to `auditor.py` at root, Phase 0 callers (`wrapper.py`, `app.py`) verified working post-swap. See `handoff/BUILD-LOG.md` Step 1 Round 2 section.
 
 ## Files Changed
 
-| File | Lines | Change |
+| File | Change | Notes |
 |---|---|---|
-| `handoff/auditor.py` | 1-870 | New (staged). Full Step 1 implementation. |
-| `handoff/BUILD-LOG.md` | full rewrite | Step 1 entry, KG-1/2/5/6/7 marked addressed, KG-8 added (demo SKILL.md self-flagging unresolved). |
-| `handoff/REVIEW-REQUEST.md` | this file | Step 1 review request. |
-
-Detailed line ranges within `handoff/auditor.py`:
-
-| Section | Lines |
-|---|---|
-| Imports + dotenv | 30-52 |
-| Constants (suffixes, skip dirs, manifest names, ignore directive, allowlists) | 55-93 |
-| `SECRET_PATTERNS` + `_STATIC_RULE_META` (Phase 0 ruleset preserved + rule IDs) | 96-148 |
-| Data model: `Finding`, `SkillManifest`, `ScanReport` (+ `to_dict` / `to_json`) | 151-205 |
-| Pass A — `_scan_static` (regex + entropy + ignore) | 208-281 |
-| Pass B — AST helpers (`_flatten_attr`, `_LeakVisitor`, `_scan_ast`) | 284-453 |
-| Pass C — LLM (`_call_anthropic`, `_call_xai`, `_parse_llm_json`, `_llm_semantic_check`) | 456-606 |
-| Source resolution (`_parse_github_url`, `_fetch_github_zip`, `_safe_extract`, `_resolve_source`) | 609-771 |
-| Discovery (`_discover_manifest`, `_discover_files`) | 774-833 |
-| Aggregation (`_compute_score`, `_compute_severity`, `_rollup_suggested_fix`, `_dedupe`) | 836-878 |
-| Public API (`scan_skill`, `scan_path`, `redact_text`, `__all__`) | 881-end |
+| `app.py` | Full rewrite | ~290 LOC; Phase 1 schema; primary CTA + 2 secondary; modal-equivalent `Apply Wrapper`; `Download Fixed` zip generator. |
+| `.streamlit/config.toml` | NEW | Dark base, primary `#22ff88`. |
+| `assets/styles.css` | NEW | Imports Inter + JetBrains Mono; resets Streamlit chrome; styles dropzone, expanders, buttons, cards. |
+| `assets/logo.svg` | NEW | Shield + chat-bubble notch, `currentColor` stroke. |
+| `ui/__init__.py` | NEW | Package marker. |
+| `ui/theme.py` | NEW | `BG_*`, `TEXT_*`, `ACCENT*`, `WARN`, `DANGER`, `INFO`; `SEVERITY_STYLE` for the three Phase 1 buckets; `FINDING_SEVERITY_STYLE` for `info/warning/high`; `SOURCE_STYLE` for `static/ast/llm`; `theme_css_variables()` emitter. |
+| `ui/components.py` | NEW | All `unsafe_allow_html=True` lives here, scoped to constants + `html.escape()`-wrapped interpolations. |
 
 ## Smoke Tests Run
 
-All passed:
+The sandbox env doesn't have `streamlit` installed, so the dashboard cannot boot here. What was verified:
 
-1. `scan_skill('demo/weather_tool', llm=False)` → severity=`High Risk`, score=100, files=2, **3 high AST findings** (`SB-PRINT-ENV-01` ×2 + `SB-LOG-ENV-01`) + bonus `SB-NET-PHONEHOME-01` warning + 6 static findings. Symbol table correctly resolves `API_KEY = os.environ.get(...)` then `print(f"...{API_KEY}...")`.
-2. Clean fixture (harmless skill) → severity=`Safe`, score=0, 0 findings.
-3. Zip with `../../etc/passwd_pwned` entry → entry rejected with warning, no escape, no findings.
-4. File with `api_key = "abcdef1234567890XYZ"  # skillbouncer: ignore` → 0 findings (KG-7 closed).
-5. `report.to_json()` → 5,808-char JSON, round-trips cleanly through `json.loads`.
+1. `py_compile` passes on every file in the project (`app.py`, `auditor.py`, `wrapper.py`, `ui/*.py`).
+2. `auditor.scan_skill('demo/weather_tool', llm=False)` → severity=`High Risk`, score=100, risk_label=`high`, 10 findings (unchanged from Step 1 Round 2).
+3. `from auditor import scan_text, redact_text, scan_path` — Phase 0 surface still works.
+4. CSS palette discipline: `grep '#[0-9a-fA-F]{6}' assets/styles.css` returns no hits — every color comes from a `--token` variable.
+5. `ui/theme.theme_css_variables()` emits valid CSS for all 13 tokens.
+6. `ui/components.LOGO_SVG` shield path matches `assets/logo.svg` source of truth.
+7. No new entries in `requirements.txt`.
+
+What needs runtime validation on the Reviewer's dev box (with `streamlit` installed):
+
+- `streamlit run app.py` boots without console errors.
+- Drag-and-drop a `.zip` from Finder into the dropzone produces a scan and renders the Results panel.
+- Pasting `https://github.com/RobinHo-coder/SkillBouncer` into the URL field and clicking Scan Skill produces a scan.
+- The empty state ("What we look for" triptych) renders before any scan and disappears after.
+- Severity + source filters narrow the visible findings list without re-scanning.
+- `Apply Wrapper` opens the install-instructions expander; `Download Fixed` produces a real zip.
+- WCAG AA contrast holds on a real screen.
 
 ## Open Questions
 
-1. **Swap-in instruction**. The brief said write to `handoff/auditor.py`. The running code in the repo root is unchanged. After Reviewer signs off, the activation step is:
+1. **Architect Q2 ("Danger" vs "High Risk")** — kept "HIGH RISK" matching `auditor.OverallSeverity`. UI-only rename to "DANGER" is a one-line change in `ui/theme.py SEVERITY_STYLE`. Project Owner / Architect: confirm which?
+2. **Header `Docs` link** — no docs site exists yet, so the link is `#`. Acceptable?
+3. **`Apply Wrapper` UX** — currently shows install instructions in an inline expander since KG-3 is open and we can't actually install. Is "honest documentation" acceptable, or does the demo for judges need this to *look* like a one-click install (lie quietly)?
+4. **`Download Fixed` patch quality** — current implementation is Reviewer-flagged "stub" by design (appends `# skillbouncer: ignore` markers, doesn't fix the underlying leak). Generates a `SKILLBOUNCER_PATCH.md` manifest alongside. Acceptable for Phase 1?
+5. **Streamlit 1.39 expander HTML labels** — code uses plain-text labels with leading severity glyphs. If 1.39 actually supports HTML in expander labels reliably, we can upgrade to colored severity dots in the label. Worth verifying on the dev box.
 
-   ```bash
-   cd /Users/robinhoesli/Desktop/projects/SkillBouncer
-   mv handoff/auditor.py auditor.py
-   ```
+## Known Gaps Status
 
-   `wrapper.py` and `app.py` need no changes — the new module preserves every Phase 0 export.
+- KG-3 (Antigravity hook) — still open. `Apply Wrapper` button surfaces the manual `uvicorn` install path until this lands.
+- KG-4 (pytest suite) — still open. Step 2 added more code that isn't covered.
+- KG-8 (demo SKILL.md self-flags) — still open. The new dashboard renders the noise faithfully.
+- KG-9, KG-10, KG-11 — Step 1 carryovers, not addressed in Step 2.
 
-2. **LLM default unresolved.** Architect's design left this as an open question for Project Owner. Builder defaulted `scan_skill(llm=True)` per Architect's recommendation; `scan_path()` (compatibility shim used by Streamlit + FastAPI) stays `llm=False`. Confirm or reverse before Step 2.
+## Re-audit Checklist for Reviewer
 
-3. **Demo `SKILL.md` self-flagging (KG-8).** The new ignore directive can fix this if added to the SKILL.md, but Step 1 deliberately did not modify the demo. Project Owner: do you want the demo SKILL.md left noisy (so the score reads 100 for the demo), or cleaned with `# skillbouncer: ignore` markers (so the score reads ~60 from the actual code)?
+- [ ] Dashboard boots cleanly (`streamlit run app.py`) on a 1280px+ viewport.
+- [ ] Drag-and-drop a `.zip` (use `demo/weather_tool` zipped) → produces severity badge, score, suggested-fix banner, expandable findings.
+- [ ] Filters (severity, source) narrow findings without re-scanning.
+- [ ] `Scan Skill` is the only enabled action with no source provided; secondary actions enable only after a non-Safe report.
+- [ ] `Download Fixed` zip extracts and contains `SKILLBOUNCER_PATCH.md` plus the original tree with markers appended at the right line numbers.
+- [ ] `Apply Wrapper` expander shows the install one-liner.
+- [ ] No regressions in `wrapper.py` (`POST /scan`, `POST /redact`) — Phase 0 attribute access via `f.rule` still works.
+- [ ] CSS palette discipline (no hard-coded hex) holds.
+- [ ] `html.escape()` applied to every dynamic interpolation in `ui/components.py`.
 
-4. **Bonus AST rule fired on demo**. `SB-NET-PHONEHOME-01` (warning) fires on `requests.get("https://api.weatherapi.com/...")` because the function also touches env vars. This is correct per spec but wasn't called out in the demo brief. Acceptable?
-
-5. **Tests**. KG-4 still open — the smoke tests above are ad-hoc. Recommend adding `pytest` + `tests/fixtures/` (zip-bomb, traversal, clean, leaky weather, missing manifest) as Step 1.5. Should this block Step 1 deploy?
-
-## Known Gaps Logged
-
-- KG-1 — Entropy: ADDRESSED in Step 1.
-- KG-2 — AST: ADDRESSED in Step 1.
-- KG-3 — Antigravity hook: still open (Step 2).
-- KG-4 — Automated tests: still open (proposed Step 1.5).
-- KG-5 — Risk score formula: ADDRESSED in Step 1.
-- KG-6 — Zip-bomb / path-traversal: ADDRESSED in Step 1.
-- KG-7 — `# skillbouncer: ignore`: ADDRESSED in Step 1.
-- KG-8 — Demo SKILL.md still self-flags (new): pending Project Owner call (see Open Question 3).
+Write findings to `handoff/reviewer_feedback.md` (lowercase, underscore — matches Round 1 convention).
