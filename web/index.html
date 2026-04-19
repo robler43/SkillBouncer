@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Estes — Securing Agentic AI</title>
+<meta name="description" content="Runtime supply-chain security for digital insiders. Real-time risk scores and redaction for third-party agent skills." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        },
+        colors: {
+          neon: '#00ff9d',
+          ink:  '#04080a',
+        },
+      }
+    }
+  }
+</script>
+
+<style>
+  /* ----------  Tokens  ---------- */
+  :root {
+    --neon: #00ff9d;
+    --ink:        #04080a;
+    --ink-card:   #070d10;
+    --text:       #eaf3ee;
+    --text-mute:  #8a9d95;
+    --text-dim:   #5b6e67;
+    --line:       rgba(255,255,255,0.06);
+    --line-hover: rgba(0,255,157,0.45);
+    --warn:       #ffd166;
+    --danger:     #ff5c7a;
+  }
+
+  html, body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  /* Soft, single-stop top wash. No radial gradient blobs anywhere else. */
+  .top-wash {
+    position: fixed; top: 0; left: 0; right: 0; height: 520px;
+    background:
+      radial-gradient(60% 100% at 50% 0%, rgba(0,255,157,0.10), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Background canvas + sweep beams sit above the wash, below content */
+  #bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+  .beams { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .beams .beam {
+    position: absolute;
+    left: -20%; width: 140%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,255,157,0.45), transparent);
+    opacity: 0;
+    animation: sweep 22s linear infinite;
+  }
+  .beams .b1 { top: 22%; animation-delay: 0s;  }
+  .beams .b2 { top: 64%; animation-delay: 9s;  animation-duration: 26s; }
+  .beams .b3 { top: 88%; animation-delay: 16s; animation-duration: 30s; }
+
+  @keyframes sweep {
+    0%   { transform: translateX(-30%); opacity: 0; }
+    25%  { opacity: 0.6; }
+    75%  { opacity: 0.6; }
+    100% { transform: translateX(30%); opacity: 0; }
+  }
+
+  /* ----------  Layout  ---------- */
+  .container-x { max-width: 1180px; margin-inline: auto; padding-inline: clamp(20px, 4vw, 40px); }
+
+  /* ----------  Type  ---------- */
+  .eyebrow {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--neon);
+    text-transform: uppercase;
+  }
+  .h1 {
+    font-size: clamp(48px, 7.4vw, 96px);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 0.98;
+    color: #ffffff;
+  }
+  .h2 {
+    font-size: clamp(28px, 3.4vw, 42px);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: #ffffff;
+  }
+  .lede {
+    color: var(--text-mute);
+    font-size: 15.5px;
+    line-height: 1.65;
+  }
+
+  /* ----------  Hairline  ---------- */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent);
+  }
+
+  /* ----------  Buttons (flat, no gradients)  ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    height: 42px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(255,255,255,0.10);
+    color: var(--text);
+    background: transparent;
+    transition: border-color .35s ease, color .35s ease, box-shadow .35s ease, background .35s ease;
+  }
+  .btn:hover {
+    border-color: var(--neon);
+    color: #ffffff;
+    box-shadow: 0 0 0 1px rgba(0,255,157,0.25), 0 0 24px rgba(0,255,157,0.20);
+  }
+  .btn .dot {
+    width: 7px; height: 7px; border-radius: 999px;
+    background: var(--neon);
+    box-shadow: 0 0 8px var(--neon);
+  }
+
+  .btn-primary {
+    background: var(--neon);
+    color: #03100b;
+    border-color: var(--neon);
+    font-weight: 600;
+  }
+  .btn-primary:hover {
+    background: #2bffaf;
+    border-color: #2bffaf;
+    color: #03100b;
+    box-shadow: 0 0 28px rgba(0,255,157,0.45);
+  }
+
+  /* ----------  Cards  ---------- */
+  .card {
+    position: relative;
+    border-radius: 14px;
+    background: #070d10;
+    border: 1px solid var(--line);
+    transition: border-color .4s ease, box-shadow .4s ease;
+  }
+  .card:hover {
+    border-color: var(--line-hover);
+    box-shadow: 0 0 0 1px rgba(0,255,157,0.12), 0 24px 60px -32px rgba(0,255,157,0.25);
+  }
+  .card-pad { padding: 28px; }
+
+  /* ----------  Logo  ---------- */
+  .logo-mark {
+    width: 24px; height: 24px;
+    color: var(--neon);
+  }
+
+  /* ----------  Nav links  ---------- */
+  .nav-link {
+    position: relative;
+    color: var(--text-mute);
+    font-size: 13.5px;
+    transition: color .25s ease;
+  }
+  .nav-link:hover { color: #ffffff; }
+  .nav-link::after {
+    content: "";
+    position: absolute; left: 0; bottom: -6px;
+    width: 0; height: 1px;
+    background: var(--neon);
+    transition: width .35s ease;
+  }
+  .nav-link:hover::after { width: 100%; }
+
+  /* ----------  Reveal on scroll  ---------- */
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity 1s ease, transform 1s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  .reveal[data-d="1"] { transition-delay: .08s; }
+  .reveal[data-d="2"] { transition-delay: .18s; }
+  .reveal[data-d="3"] { transition-delay: .28s; }
+  .reveal[data-d="4"] { transition-delay: .38s; }
+
+  /* ----------  Drop zone  ---------- */
+  .drop {
+    position: relative;
+    border: 1px dashed rgba(255,255,255,0.14);
+    border-radius: 16px;
+    background: #060b0d;
+    padding: 56px 32px;
+    text-align: center;
+    transition: border-color .35s ease, background .35s ease, box-shadow .35s ease;
+  }
+  .drop:hover, .drop.is-drag {
+    border-color: var(--neon);
+    background: rgba(0,255,157,0.04);
+    box-shadow: inset 0 0 0 1px rgba(0,255,157,0.18), 0 0 40px rgba(0,255,157,0.18);
+  }
+  .drop .ico {
+    width: 48px; height: 48px;
+    margin: 0 auto 18px;
+    color: var(--neon);
+    opacity: 0.9;
+  }
+  .drop .or {
+    display: inline-block;
+    margin: 22px 0 14px;
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .drop .url-row {
+    display: flex; gap: 8px;
+    max-width: 460px;
+    margin: 0 auto;
+  }
+  .drop input[type="text"] {
+    flex: 1;
+    height: 42px;
+    padding: 0 14px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    font-size: 13.5px;
+    transition: border-color .25s ease, box-shadow .25s ease;
+    outline: none;
+  }
+  .drop input[type="text"]::placeholder { color: var(--text-dim); }
+  .drop input[type="text"]:focus {
+    border-color: var(--neon);
+    box-shadow: 0 0 0 3px rgba(0,255,157,0.15);
+  }
+
+  /* ----------  Risk gauge  ---------- */
+  .gauge-wrap { position: relative; width: 100%; max-width: 320px; aspect-ratio: 1/1; margin: 0 auto; }
+  .gauge-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .gauge-track { stroke: rgba(255,255,255,0.05); }
+  .gauge-fill {
+    stroke: var(--neon);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1.6s cubic-bezier(.2,.7,.2,1), stroke .6s ease, filter .6s ease;
+    filter: drop-shadow(0 0 12px rgba(0,255,157,0.55));
+  }
+  .gauge-fill.is-warn   { stroke: var(--warn);   filter: drop-shadow(0 0 12px rgba(255,209,102,0.55)); }
+  .gauge-fill.is-danger { stroke: var(--danger); filter: drop-shadow(0 0 14px rgba(255,92,122,0.60)); }
+
+  .gauge-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+  }
+  .gauge-center .num {
+    font-family: 'JetBrains Mono';
+    font-size: 64px; font-weight: 500;
+    color: #ffffff;
+    line-height: 1;
+  }
+  .gauge-center .lbl {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .gauge-state {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-mute);
+  }
+  .gauge-state .pip { width: 6px; height: 6px; border-radius: 999px; background: var(--text-dim); }
+  .gauge-state.is-safe   { color: var(--neon);   border-color: rgba(0,255,157,0.35); }
+  .gauge-state.is-safe   .pip { background: var(--neon);   box-shadow: 0 0 8px var(--neon); }
+  .gauge-state.is-warn   { color: var(--warn);   border-color: rgba(255,209,102,0.35); }
+  .gauge-state.is-warn   .pip { background: var(--warn);   box-shadow: 0 0 8px var(--warn); }
+  .gauge-state.is-danger { color: var(--danger); border-color: rgba(255,92,122,0.35); }
+  .gauge-state.is-danger .pip { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  /* ----------  Code blocks (monochrome)  ---------- */
+  .code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: #d6e6dd;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .code .dim    { color: var(--text-dim); }
+  .code .neon   { color: var(--neon); }
+  .code .danger { color: var(--danger); }
+
+  /* ----------  Badges  ---------- */
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--text-mute);
+    border: 1px solid var(--line);
+    background: transparent;
+    transition: color .3s ease, border-color .3s ease, box-shadow .3s ease;
+  }
+  .badge:hover { color: #ffffff; border-color: var(--line-hover); box-shadow: 0 0 18px rgba(0,255,157,0.2); }
+  .badge .pip  { width: 6px; height: 6px; border-radius: 999px; background: var(--neon); box-shadow: 0 0 6px var(--neon); }
+
+  /* ----------  Number tag  ---------- */
+  .num-tag {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    color: var(--neon);
+    letter-spacing: 0.24em;
+  }
+
+  /* ----------  Reduced motion  ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  ::selection { background: rgba(0,255,157,0.3); color: #03100b; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--ink); }
+  ::-webkit-scrollbar-thumb { background: #0d2a22; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #14443a; }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- Background layers -->
+<div class="top-wash"></div>
+<canvas id="bg-canvas"></canvas>
+<div class="beams" aria-hidden="true">
+  <div class="beam b1"></div>
+  <div class="beam b2"></div>
+  <div class="beam b3"></div>
+</div>
+
+<!-- ====================  HEADER  ==================== -->
+<header class="relative z-10">
+  <div class="container-x flex items-center justify-between py-6">
+    <a href="#" class="flex items-center gap-3">
+      <svg class="logo-mark" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 4 L33 8 V19 C33 26.5 27.5 32.5 20 35 C12.5 32.5 7 26.5 7 19 V8 Z" />
+        <path d="M14 19.5 L18.5 24 L27 15.5" />
+      </svg>
+      <span class="text-[15px] tracking-[0.2em] font-medium text-white">ESTES</span>
+    </a>
+
+    <nav class="hidden md:flex items-center gap-9">
+      <a href="#scan"      class="nav-link">Scan</a>
+      <a href="#features"  class="nav-link">Platform</a>
+      <a href="#demo"      class="nav-link">Live Demo</a>
+      <a href="#trust"     class="nav-link">Trust</a>
+    </nav>
+
+    <a href="#contact" class="btn">
+      <span class="dot"></span>
+      Contact
+    </a>
+  </div>
+  <div class="hairline"></div>
+</header>
+
+<!-- ====================  HERO  ==================== -->
+<section class="relative z-10 pt-28 md:pt-36 pb-24">
+  <div class="container-x">
+    <div class="flex flex-col items-center text-center">
+      <span class="eyebrow reveal">— Runtime AI Supply-Chain Security</span>
+
+      <h1 class="h1 mt-7 reveal" data-d="1">
+        Securing<br/>Agentic AI.
+      </h1>
+
+      <p class="lede mt-7 max-w-[520px] reveal" data-d="2">
+        Real-time risk scores and redaction for digital insiders.
+      </p>
+
+      <div class="mt-10 flex items-center gap-3 reveal" data-d="3">
+        <a href="#scan" class="btn btn-primary">
+          Run a Scan
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </a>
+        <a href="#features" class="btn">
+          <span class="dot"></span>
+          How it works
+        </a>
+      </div>
+
+      <div class="relative w-full mt-20 reveal" data-d="4">
+        <canvas id="constellation" class="block w-full h-[220px] md:h-[280px]"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================  SCAN: UPLOAD + RISK  ==================== -->
+<section id="scan" class="relative z-10 pb-32">
+  <div class="container-x">
+    <div class="flex items-end justify-between flex-wrap gap-4 mb-10 reveal">
+      <div>
+        <span class="eyebrow">— Skill Checkup</span>
+        <h2 class="h2 mt-3">Drop a skill. Get a verdict.</h2>
+      </div>
+      <p class="lede max-w-sm">
+        Static, AST, and LLM passes return a single risk score in seconds. No install required.
+      </p>
+    </div>
+
+    <div class="grid lg:grid-cols-[1.5fr_1fr] gap-6">
+      <!-- Drag-and-drop -->
+      <div class="card reveal" data-d="1">
+        <div class="card-pad">
+          <div class="flex items-center justify-between mb-6">
+            <span class="num-tag">[ INPUT ]</span>
+            <span class="text-[12px] text-[color:var(--text-dim)] font-mono tracking-widest">SCAN&nbsp;#2087</span>
+          </div>
+
+          <label id="drop" class="drop block cursor-pointer">
+            <input id="file" type="file" class="hidden" />
+            <svg class="ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 30 v6 a4 4 0 0 0 4 4 h12 a4 4 0 0 0 4 -4 v-6"/>
+              <path d="M24 8 v22"/>
+              <path d="M16 16 l8 -8 l8 8"/>
+            </svg>
+            <div class="text-[17px] text-white font-medium">Drop a third-party skill here</div>
+            <div class="mt-2 text-[13px] text-[color:var(--text-mute)]">.zip archive or single source file — up to 25&nbsp;MB</div>
+
+            <div class="or">— or —</div>
+
+            <div class="url-row" onclick="event.stopPropagation()">
+              <input id="url" type="text" placeholder="https://github.com/owner/repo" />
+              <button type="button" id="scan-btn" class="btn btn-primary !h-[42px] !px-5">Scan</button>
+            </div>
+          </label>
+
+          <div class="mt-6 flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--text-dim)] font-mono">
+            <span class="badge"><span class="pip"></span>SAFE FOR PROD</span>
+            <span class="badge">PII REDACTION</span>
+            <span class="badge">NO TELEMETRY</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Risk score -->
+      <div class="card reveal" data-d="2">
+        <div class="card-pad">
+          <div class="flex items-center justify-between mb-6">
+            <span class="num-tag">[ RISK SCORE ]</span>
+            <span id="gauge-state" class="gauge-state is-danger">
+              <span class="pip"></span><span id="gauge-state-label">High</span>
+            </span>
+          </div>
+
+          <div class="gauge-wrap" id="gauge">
+            <svg viewBox="0 0 200 200">
+              <circle cx="100" cy="100" r="86" stroke-width="10" fill="none" class="gauge-track"/>
+              <circle cx="100" cy="100" r="86" stroke-width="10" fill="none"
+                      class="gauge-fill is-danger"
+                      pathLength="100"
+                      stroke-dasharray="100 100"
+                      stroke-dashoffset="100"
+                      id="gauge-fill"/>
+            </svg>
+            <div class="gauge-center">
+              <div class="num" id="gauge-num">0</div>
+              <div class="lbl">/ 100 risk</div>
+            </div>
+          </div>
+
+          <div class="mt-6 grid grid-cols-3 text-center">
+            <div class="border-r border-white/[0.05] py-2">
+              <div class="font-mono text-[16px] text-white">3</div>
+              <div class="text-[10.5px] text-[color:var(--text-dim)] tracking-[0.2em] uppercase mt-1">High</div>
+            </div>
+            <div class="border-r border-white/[0.05] py-2">
+              <div class="font-mono text-[16px] text-white">5</div>
+              <div class="text-[10.5px] text-[color:var(--text-dim)] tracking-[0.2em] uppercase mt-1">Warn</div>
+            </div>
+            <div class="py-2">
+              <div class="font-mono text-[16px] text-white">11</div>
+              <div class="text-[10.5px] text-[color:var(--text-dim)] tracking-[0.2em] uppercase mt-1">Info</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================  FEATURES  ==================== -->
+<section id="features" class="relative z-10 pb-32">
+  <div class="container-x">
+    <div class="max-w-2xl mb-14 reveal">
+      <span class="eyebrow">— Platform</span>
+      <h2 class="h2 mt-3">Three layers between a skill and your model context.</h2>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-5">
+      <!-- 01 -->
+      <article class="card reveal" data-d="1">
+        <div class="card-pad">
+          <div class="flex items-center justify-between mb-8">
+            <span class="num-tag">01</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--neon)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          </div>
+          <h3 class="text-white text-[19px] font-medium tracking-tight">Pre-Install Auditor</h3>
+          <p class="mt-3 text-[14px] text-[color:var(--text-mute)] leading-relaxed">
+            Static + AST + LLM passes detect debug prints leaking env vars, semantic mismatches in
+            <span class="font-mono text-[12.5px] text-[color:var(--text)]">SKILL.md</span>, and unsafe credential reads.
+          </p>
+          <ul class="mt-7 space-y-2.5 text-[13px] text-[color:var(--text-mute)]">
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Risk score 0 – 100, severity-tiered findings</li>
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Stub auto-patch with <span class="font-mono">estes: ignore</span></li>
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> JSON / SARIF export for audit trails</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- 02 -->
+      <article class="card reveal" data-d="2">
+        <div class="card-pad">
+          <div class="flex items-center justify-between mb-8">
+            <span class="num-tag">02</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--neon)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3 class="text-white text-[19px] font-medium tracking-tight">Real-Time Wrapper &amp; Redaction</h3>
+          <p class="mt-3 text-[14px] text-[color:var(--text-mute)] leading-relaxed">
+            A FastAPI proxy intercepts every tool output before it reaches the LLM context window.
+            Secrets are redacted in-flight; warnings logged with optional human approval.
+          </p>
+          <ul class="mt-7 space-y-2.5 text-[13px] text-[color:var(--text-mute)]">
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Pattern + entropy + custom regex detectors</li>
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Drop-in for Antigravity, Claude Code, OpenClaw</li>
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Sub-40ms per-call overhead</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- 03 -->
+      <article class="card reveal" data-d="3">
+        <div class="card-pad">
+          <div class="flex items-center justify-between mb-8">
+            <span class="num-tag">03</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--neon)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+          </div>
+          <h3 class="text-white text-[19px] font-medium tracking-tight">Governance &amp; Compliance</h3>
+          <p class="mt-3 text-[14px] text-[color:var(--text-mute)] leading-relaxed">
+            Map every finding to a watsonx.governance-aligned policy. Track skill provenance and
+            enforce org-wide allowlists from a single console.
+          </p>
+          <ul class="mt-7 space-y-2.5 text-[13px] text-[color:var(--text-mute)]">
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Severity tiers: Safe → Info → Warn → High</li>
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Policy-as-code, signed allowlists</li>
+            <li class="flex gap-3"><span class="text-[color:var(--neon)]">›</span> Audit-ready ledger export</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ====================  LIVE DEMO: BEFORE / AFTER  ==================== -->
+<section id="demo" class="relative z-10 pb-32">
+  <div class="container-x">
+    <div class="max-w-2xl mb-12 reveal">
+      <span class="eyebrow">— Live Demo</span>
+      <h2 class="h2 mt-3">A real skill, before and after Estes.</h2>
+      <p class="lede mt-4">
+        The same <span class="font-mono text-[13.5px] text-white">weather_tool</span> skill, run twice.
+        The leak on the left is a single <span class="font-mono text-[13.5px] text-white">print()</span> away from
+        polluting your model context.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-5">
+      <div class="card reveal" data-d="1">
+        <div class="card-pad">
+          <div class="flex items-center justify-between mb-4">
+            <span class="num-tag" style="color: var(--danger)">[ BEFORE — LEAKY SKILL ]</span>
+            <span class="gauge-state is-danger"><span class="pip"></span>Leak</span>
+          </div>
+          <div class="text-white text-[15px] font-medium mb-3 font-mono">weather_tool / fetch.py</div>
+<pre class="code"><span class="dim"># tool output → captured by agent → LLM context</span>
+<span class="neon">def</span> get_weather(city):
+    api_key = os.environ[<span class="dim">"OPENWEATHER_API_KEY"</span>]
+    <span class="danger">print(f"DEBUG key={api_key}")</span>
+    return requests.get(url, params={
+        <span class="dim">"key"</span>: api_key,
+    }).json()</pre>
+          <div class="mt-4 text-[13px] text-[color:var(--text-mute)]">
+            Live API key flows into chat history. Anyone resuming the export can extract it.
+          </div>
+        </div>
+      </div>
+
+      <div class="card reveal" data-d="2">
+        <div class="card-pad">
+          <div class="flex items-center justify-between mb-4">
+            <span class="num-tag">[ AFTER — PROTECTED ]</span>
+            <span class="gauge-state is-safe"><span class="pip"></span>Redacted</span>
+          </div>
+          <div class="text-white text-[15px] font-medium mb-3 font-mono">estes / wrapper</div>
+<pre class="code"><span class="dim"># intercepted at runtime → context stays clean</span>
+<span class="neon">POST</span> /redact
+
+<span class="dim">› in </span> "DEBUG key=sk_live_4tQk29ZxbN8m..."
+<span class="dim">› out</span> "DEBUG key=<span class="neon">sk_live_***REDACTED***</span>"
+
+<span class="dim"># compliance ledger</span>
+{ "rule": "OPENAI_KEY", "severity": "high",
+  "skill": "weather_tool", "action": "redact" }</pre>
+          <div class="mt-4 text-[13px] text-[color:var(--text-mute)]">
+            The secret never enters the model context. An audit entry is written to the ledger.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================  TRUST  ==================== -->
+<section id="trust" class="relative z-10 pb-32">
+  <div class="container-x">
+    <div class="card reveal">
+      <div class="card-pad py-10 px-8 md:px-12">
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-10">
+          <div class="max-w-md">
+            <span class="eyebrow">— Trusted Methodology</span>
+            <h3 class="text-white text-[24px] font-medium tracking-tight mt-3">Built on standards security teams already speak.</h3>
+            <p class="lede mt-3 text-[14px]">
+              Findings map to recognised industry frameworks so AppSec, GRC, and platform teams adopt Estes without rewriting policy.
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="badge"><span class="pip"></span> SANS Top 25</span>
+            <span class="badge"><span class="pip"></span> OWASP LLM</span>
+            <span class="badge"><span class="pip"></span> GIAC GSEC</span>
+            <span class="badge"><span class="pip"></span> OffSec OSCP</span>
+            <span class="badge"><span class="pip"></span> NIST AI RMF</span>
+            <span class="badge"><span class="pip"></span> ISO 42001</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================  CTA  ==================== -->
+<section id="contact" class="relative z-10 pb-28">
+  <div class="container-x text-center">
+    <span class="eyebrow reveal">— Ready when your skills aren't</span>
+    <h2 class="h2 mt-4 max-w-2xl mx-auto reveal" data-d="1">Run your first scan in under sixty seconds.</h2>
+    <div class="mt-9 flex flex-wrap items-center gap-3 justify-center reveal" data-d="2">
+      <a href="#scan" class="btn btn-primary">Start free audit
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </a>
+      <a href="mailto:hello@estes.dev" class="btn">
+        <span class="dot"></span> Talk to security
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ====================  FOOTER  ==================== -->
+<footer class="relative z-10 pb-12">
+  <div class="container-x">
+    <div class="hairline mb-8"></div>
+    <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-3">
+        <svg class="logo-mark" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 4 L33 8 V19 C33 26.5 27.5 32.5 20 35 C12.5 32.5 7 26.5 7 19 V8 Z" />
+          <path d="M14 19.5 L18.5 24 L27 15.5" />
+        </svg>
+        <span class="text-[12.5px] text-[color:var(--text-dim)]">© 2026 Estes — Runtime AI security.</span>
+      </div>
+
+      <nav class="flex flex-wrap items-center justify-center gap-x-7 gap-y-3">
+        <a class="nav-link" href="#scan">Scan</a>
+        <a class="nav-link" href="#features">Platform</a>
+        <a class="nav-link" href="#demo">Live Demo</a>
+        <a class="nav-link" href="#trust">Governance</a>
+        <a class="nav-link" href="#contact">Contact</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+<script>
+  /* ----------  Reveal on scroll  ---------- */
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+  /* ----------  Smooth anchor scroll  ---------- */
+  document.querySelectorAll('a[href^="#"]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      const id = a.getAttribute('href');
+      if (!id || id === '#') return;
+      const el = document.querySelector(id);
+      if (!el) return;
+      e.preventDefault();
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  /* ----------  Drop zone interactions  ---------- */
+  (function () {
+    const drop = document.getElementById('drop');
+    const file = document.getElementById('file');
+    const url  = document.getElementById('url');
+    if (!drop) return;
+
+    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation(); drop.classList.add('is-drag');
+    }));
+    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation(); drop.classList.remove('is-drag');
+    }));
+    drop.addEventListener('drop', (e) => {
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) flashScan('Queued: ' + f.name);
+    });
+    file && file.addEventListener('change', () => {
+      const f = file.files && file.files[0];
+      if (f) flashScan('Queued: ' + f.name);
+    });
+    document.getElementById('scan-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      flashScan(url.value ? 'Scanning ' + url.value : 'Choose a file or paste a URL');
+    });
+
+    function flashScan(msg) {
+      const note = document.createElement('div');
+      note.textContent = msg;
+      note.style.cssText = `
+        position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
+        background: rgba(7,13,16,0.95); border: 1px solid rgba(0,255,157,0.4);
+        color: #eaf3ee; font-family: 'JetBrains Mono'; font-size: 12px;
+        padding: 10px 14px; border-radius: 999px; z-index: 50;
+        box-shadow: 0 0 24px rgba(0,255,157,0.3);
+        opacity: 0; transition: opacity .35s ease;
+      `;
+      document.body.appendChild(note);
+      requestAnimationFrame(() => { note.style.opacity = '1'; });
+      setTimeout(() => { note.style.opacity = '0'; setTimeout(() => note.remove(), 400); }, 1800);
+    }
+  })();
+
+  /* ----------  Risk gauge  ---------- */
+  const TARGET_SCORE = 78;
+  function colorClassFor(score) {
+    if (score < 40) return { stroke: '', state: 'is-safe',   label: 'Safe' };
+    if (score < 70) return { stroke: 'is-warn',   state: 'is-warn',   label: 'Warning' };
+    return                  { stroke: 'is-danger', state: 'is-danger', label: 'High' };
+  }
+  function animateGauge() {
+    const fill = document.getElementById('gauge-fill');
+    const num  = document.getElementById('gauge-num');
+    const stateEl = document.getElementById('gauge-state');
+    const stateLbl = document.getElementById('gauge-state-label');
+    if (!fill || !num) return;
+
+    const c = colorClassFor(TARGET_SCORE);
+    fill.classList.remove('is-warn','is-danger'); if (c.stroke) fill.classList.add(c.stroke);
+    stateEl.classList.remove('is-safe','is-warn','is-danger'); stateEl.classList.add(c.state);
+    stateLbl.textContent = c.label;
+
+    fill.setAttribute('stroke-dashoffset', 100 - TARGET_SCORE);
+
+    const start = performance.now(), dur = 1500;
+    function tick(t) {
+      const k = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - k, 3);
+      num.textContent = Math.round(TARGET_SCORE * eased);
+      if (k < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  const gaugeWrap = document.getElementById('gauge');
+  if (gaugeWrap) {
+    const gIO = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { animateGauge(); gIO.disconnect(); } });
+    }, { threshold: 0.4 });
+    gIO.observe(gaugeWrap);
+  }
+
+  /* ----------  Shared helpers  ---------- */
+  // Pre-render a glow sprite once; drawImage is ~10x cheaper than per-frame shadowBlur.
+  function makeGlowSprite(size, core, glow) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    grd.addColorStop(0,    core);
+    grd.addColorStop(0.35, glow);
+    grd.addColorStop(1,    'rgba(0,255,157,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, size, size);
+    return c;
+  }
+
+  // ~30fps frame gate + pause when offscreen / tab hidden.
+  function makeRunner(canvas, drawFn) {
+    let last = 0, running = true, visible = true;
+    const FRAME = 1000 / 30;
+
+    function loop(now) {
+      if (!visible || !running) { requestAnimationFrame(loop); return; }
+      if (now - last >= FRAME) { drawFn(now); last = now; }
+      requestAnimationFrame(loop);
+    }
+    document.addEventListener('visibilitychange', () => { running = !document.hidden; });
+    if (canvas) {
+      const io = new IntersectionObserver((es) => { visible = es[0].isIntersecting; }, { threshold: 0 });
+      io.observe(canvas);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  /* ----------  Background particles (sparse, slow, no per-frame shadow)  ---------- */
+  (function () {
+    const cv = document.getElementById('bg-canvas');
+    if (!cv) return;
+    const ctx = cv.getContext('2d', { alpha: true });
+
+    let w, h, dpr, parts, sprite, spriteSize;
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      w = cv.width  = window.innerWidth  * dpr;
+      h = cv.height = window.innerHeight * dpr;
+      cv.style.width  = window.innerWidth + 'px';
+      cv.style.height = window.innerHeight + 'px';
+
+      spriteSize = Math.round(14 * dpr);
+      sprite = makeGlowSprite(spriteSize, 'rgba(220,255,235,0.95)', 'rgba(0,255,157,0.35)');
+
+      const count = Math.floor((window.innerWidth * window.innerHeight) / 42000);
+      parts = new Array(count).fill(0).map(() => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        s: (Math.random() * 0.8 + 0.5),
+        vy: (Math.random() * 0.10 + 0.02) * dpr,
+        a: Math.random() * 0.35 + 0.2,
+        tw: Math.random() * Math.PI * 2,
+      }));
+    }
+    resize();
+    let resizeT;
+    window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(resize, 150); });
+
+    makeRunner(cv, () => {
+      ctx.clearRect(0, 0, w, h);
+      for (const p of parts) {
+        p.y -= p.vy;
+        p.tw += 0.025;
+        if (p.y < -spriteSize) { p.y = h + spriteSize; p.x = Math.random() * w; }
+        const a = p.a * (0.6 + 0.4 * Math.sin(p.tw));
+        const sz = spriteSize * p.s;
+        ctx.globalAlpha = a;
+        ctx.drawImage(sprite, p.x - sz/2, p.y - sz/2, sz, sz);
+      }
+      ctx.globalAlpha = 1;
+    });
+  })();
+
+  /* ----------  Hero constellation (sparse, throttled)  ---------- */
+  (function () {
+    const cv = document.getElementById('constellation');
+    if (!cv) return;
+    const ctx = cv.getContext('2d', { alpha: true });
+
+    let w, h, dpr, nodes, mouse = { x: -9999, y: -9999 };
+    let sprite, spriteSize;
+
+    function resize() {
+      const rect = cv.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      w = cv.width  = rect.width  * dpr;
+      h = cv.height = rect.height * dpr;
+
+      spriteSize = Math.round(12 * dpr);
+      sprite = makeGlowSprite(spriteSize, 'rgba(210,255,225,0.95)', 'rgba(0,255,157,0.5)');
+
+      const count = Math.max(20, Math.min(40, Math.floor(rect.width / 42)));
+      nodes = new Array(count).fill(0).map(() => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.18 * dpr,
+        vy: (Math.random() - 0.5) * 0.18 * dpr,
+      }));
+    }
+    resize();
+    let resizeT;
+    window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(resize, 150); });
+
+    cv.addEventListener('mousemove', (e) => {
+      const rect = cv.getBoundingClientRect();
+      mouse.x = (e.clientX - rect.left) * dpr;
+      mouse.y = (e.clientY - rect.top)  * dpr;
+    });
+    cv.addEventListener('mouseleave', () => { mouse.x = -9999; mouse.y = -9999; });
+
+    const LINK = 130;
+
+    makeRunner(cv, () => {
+      ctx.clearRect(0, 0, w, h);
+      const linkPx = LINK * dpr;
+      const linkSq = linkPx * linkPx;
+
+      for (const n of nodes) {
+        n.x += n.vx; n.y += n.vy;
+        const dx = mouse.x - n.x, dy = mouse.y - n.y;
+        const mdSq = dx*dx + dy*dy;
+        const range = 200 * dpr;
+        if (mdSq < range * range && mdSq > 1) {
+          const md = Math.sqrt(mdSq);
+          n.vx += (dx / md) * 0.014;
+          n.vy += (dy / md) * 0.014;
+        }
+        n.vx *= 0.985; n.vy *= 0.985;
+        if (n.x < 0) n.x = w; if (n.x > w) n.x = 0;
+        if (n.y < 0) n.y = h; if (n.y > h) n.y = 0;
+      }
+
+      // Edges: cheap squared-distance check, no Math.hypot per pair.
+      ctx.lineWidth = 1 * dpr;
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        for (let j = i + 1; j < nodes.length; j++) {
+          const b = nodes[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const dSq = dx*dx + dy*dy;
+          if (dSq < linkSq) {
+            const alpha = (1 - Math.sqrt(dSq) / linkPx) * 0.35;
+            ctx.strokeStyle = `rgba(0,255,157,${alpha})`;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Nodes: drawn from a pre-rendered glow sprite (no shadowBlur).
+      for (const n of nodes) {
+        ctx.drawImage(sprite, n.x - spriteSize/2, n.y - spriteSize/2, spriteSize, spriteSize);
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
